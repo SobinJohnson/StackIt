@@ -14,7 +14,7 @@ StackIt is a lightweight, React-based Q&A platform where users can ask, answer, 
 
 ## 👥 Team Lighthouse
 
-📧 **Contact Email**: [lighthouse.team@stackit.dev](mailto:lighthouse.team@stackit.dev)  
+📧 **Contact Email**: [lighthouse.team@stackit.dev](mailto:labs.lighthouse@gmail.com)  
 🛠️ **Built With**: React.js
 
 ---
