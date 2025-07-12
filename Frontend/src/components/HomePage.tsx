@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, ArrowUp, ArrowDown, Clock, Eye, User, Tag } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowDown, Clock, Eye, User, Tag, Filter, Menu } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -166,6 +166,14 @@ const mockQuestions: Question[] = [
 const HomePage = () => {
   const [filter, setFilter] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [search, setSearch] = useState('');
+  // Track votes per question: { [id]: 'up' | 'down' | null }
+  const [votes, setVotes] = useState(() => {
+    const obj = {};
+    mockQuestions.forEach(q => { obj[q.id] = null; });
+    return obj;
+  });
   const questionsPerPage = 5; // Reduced for better testing
 
   const filters = [
@@ -175,12 +183,22 @@ const HomePage = () => {
     { key: 'votes', label: 'Votes' }
   ];
 
+  // Search filter
+  const filteredQuestions = mockQuestions.filter(q => {
+    const s = search.toLowerCase();
+    return (
+      q.title.toLowerCase().includes(s) ||
+      q.description.toLowerCase().includes(s) ||
+      q.tags.some(tag => tag.toLowerCase().includes(s))
+    );
+  });
+
   // Calculate pagination values
-  const totalQuestions = mockQuestions.length;
-  const totalPages = Math.ceil(totalQuestions / questionsPerPage);
+  const totalQuestions = filteredQuestions.length;
+  const totalPages = Math.max(1, Math.ceil(totalQuestions / questionsPerPage));
   const startIndex = (currentPage - 1) * questionsPerPage;
   const endIndex = startIndex + questionsPerPage;
-  const currentQuestions = mockQuestions.slice(startIndex, endIndex);
+  const currentQuestions = filteredQuestions.slice(startIndex, endIndex);
 
   // Handle page navigation
   const handlePageChange = (page: number) => {
@@ -224,25 +242,75 @@ const HomePage = () => {
     return pages;
   };
 
+  // Voting logic
+  const handleVote = (id: string, type: 'up' | 'down') => {
+    setVotes(prev => {
+      if (prev[id] === type) return prev; // already voted
+      const newVotes = { ...prev };
+      newVotes[id] = type;
+      return newVotes;
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-2 sm:px-0">
+      {/* Search Bar */}
+      <div className="w-full max-w-2xl mx-auto pt-4">
+        <input
+          type="text"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+          placeholder="Search questions..."
+          className="w-full px-4 py-2 border border-[#888888] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#865A7B] focus:border-transparent text-base"
+        />
+      </div>
+
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">All Questions</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0 pt-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center sm:text-left">All Questions</h1>
         <Link 
           to="/ask" 
-          className="px-6 py-3 bg-[#865A7B] text-white rounded-lg hover:bg-[#764a6b] transition-colors font-medium"
+          className="w-full sm:w-auto px-6 py-3 bg-[#865A7B] text-white rounded-lg hover:bg-[#764a6b] transition-colors font-medium text-center"
         >
           Ask Question
         </Link>
       </div>
 
-      {/* Stats and Filters */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+      {/* Filters for mobile */}
+      <div className="sm:hidden flex justify-end">
+        <button
+          className="flex items-center gap-2 px-4 py-2 border border-[#888888] rounded-lg text-[#888888] hover:border-[#865A7B] hover:text-[#865A7B] transition-colors"
+          onClick={() => setShowMobileFilters(!showMobileFilters)}
+          aria-label="Open filters menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </div>
+      {showMobileFilters && (
+        <div className="sm:hidden bg-white border border-gray-200 rounded-lg shadow-lg p-4 mb-4 z-20">
+          <div className="flex flex-col gap-2">
+            {filters.map((filterOption) => (
+              <button
+                key={filterOption.key}
+                onClick={() => { setFilter(filterOption.key); setShowMobileFilters(false); }}
+                className={`w-full px-4 py-2 rounded-lg border transition-colors text-left ${
+                  filter === filterOption.key
+                    ? 'bg-[#865A7B] text-white border-[#865A7B]'
+                    : 'bg-white text-[#888888] border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
+                }`}
+              >
+                {filterOption.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stats and Filters for desktop */}
+      <div className="hidden sm:flex flex-row justify-between items-center">
         <div className="text-[#888888]">
           {totalQuestions} questions
         </div>
-        
         <div className="flex space-x-2">
           {filters.map((filterOption) => (
             <button
@@ -262,75 +330,82 @@ const HomePage = () => {
 
       {/* Questions List */}
       <div className="space-y-4">
-        {currentQuestions.map((question) => (
-          <div key={question.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-            <div className="flex space-x-4">
-              {/* Stats Column */}
-              <div className="flex flex-col items-center space-y-2 text-center min-w-[80px]">
-                <div className="flex items-center space-x-1 text-[#888888]">
-                  <ArrowUp className="w-4 h-4" />
-                  <span className="font-medium">{question.votes}</span>
+        {currentQuestions.map((question) => {
+          // Calculate display votes
+          let displayVotes = question.votes;
+          if (votes[question.id] === 'up') displayVotes += 1;
+          if (votes[question.id] === 'down') displayVotes -= 1;
+          return (
+            <div key={question.id} className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6 hover:shadow-lg transition-shadow flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:space-x-4 gap-4 sm:gap-0">
+                {/* Stats Column */}
+                <div className="flex flex-row sm:flex-col items-center sm:items-center justify-between sm:justify-start space-x-4 sm:space-x-0 sm:space-y-2 text-center min-w-[80px]">
+                  <button
+                    onClick={() => handleVote(question.id, 'up')}
+                    disabled={votes[question.id] === 'up'}
+                    className={`p-1 rounded-full transition-colors ${votes[question.id] === 'up' ? 'bg-[#865A7B] text-white' : 'hover:bg-[#865A7B] hover:text-white text-[#888888]'}`}
+                    aria-label="Upvote"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                  <span className="font-medium">{displayVotes}</span>
+                  <button
+                    onClick={() => handleVote(question.id, 'down')}
+                    disabled={votes[question.id] === 'down'}
+                    className={`p-1 rounded-full transition-colors ${votes[question.id] === 'down' ? 'bg-[#865A7B] text-white' : 'hover:bg-[#865A7B] hover:text-white text-[#888888]'}`}
+                    aria-label="Downvote"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className={`flex items-center space-x-1 ${question.isAnswered ? 'text-green-600' : 'text-[#888888]'}`}>
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="font-medium">{question.answers}</span>
-                </div>
-                <div className="flex items-center space-x-1 text-[#888888]">
-                  <Eye className="w-4 h-4" />
-                  <span className="text-sm">{question.views}</span>
-                </div>
-              </div>
-
-              {/* Content Column */}
-              <div className="flex-1 space-y-3">
-                <Link 
-                  to={`/question/${question.id}`}
-                  className="block text-xl font-semibold text-[#865A7B] hover:text-[#764a6b] transition-colors"
-                >
-                  {question.title}
-                </Link>
-                
-                <p className="text-gray-600 line-clamp-2">
-                  {question.description}
-                </p>
-
-                {/* Tags */}
-                <div className="flex flex-wrap gap-2">
-                  {question.tags.map((tag) => (
-                    <span 
-                      key={tag}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-[#865A7B] border border-gray-200"
-                    >
-                      <Tag className="w-3 h-3 mr-1" />
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Meta info */}
-                <div className="flex items-center justify-between text-sm text-[#888888]">
-                  <div className="flex items-center space-x-1">
-                    <User className="w-4 h-4" />
-                    <span>{question.author}</span>
+                {/* Content Column */}
+                <div className="flex-1 space-y-3">
+                  <Link 
+                    to={`/question/${question.id}`}
+                    className="block text-lg sm:text-xl font-semibold text-[#865A7B] hover:text-[#764a6b] transition-colors"
+                  >
+                    {question.title}
+                  </Link>
+                  <p className="text-gray-600 line-clamp-2 text-sm sm:text-base">
+                    {question.description}
+                  </p>
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-2">
+                    {question.tags.map((tag) => (
+                      <span 
+                        key={tag}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm bg-gray-100 text-[#865A7B] border border-gray-200"
+                      >
+                        <Tag className="w-3 h-3 mr-1" />
+                        {tag}
+                      </span>
+                    ))}
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{question.createdAt}</span>
+                  {/* Meta info */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs sm:text-sm text-[#888888] gap-1 sm:gap-0">
+                    <div className="flex items-center space-x-1">
+                      <User className="w-4 h-4" />
+                      <span>{question.author}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="w-4 h-4" />
+                      <span>{question.createdAt}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2 pt-8">
+        <div className="flex flex-wrap justify-center items-center space-x-2 pt-8">
           <button 
             onClick={handlePreviousPage}
             disabled={currentPage === 1}
-            className={`px-3 py-2 border rounded-lg transition-colors ${
+            className={`px-3 py-2 border rounded-lg transition-colors mb-2 sm:mb-0 ${
               currentPage === 1
                 ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                 : 'border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
@@ -338,12 +413,11 @@ const HomePage = () => {
           >
             &lt;
           </button>
-          
           {getPageNumbers().map((page) => (
             <button
               key={page}
               onClick={() => handlePageChange(page)}
-              className={`px-3 py-2 rounded-lg transition-colors ${
+              className={`px-3 py-2 rounded-lg transition-colors mb-2 sm:mb-0 ${
                 currentPage === page
                   ? 'bg-[#865A7B] text-white'
                   : 'border border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
@@ -352,11 +426,10 @@ const HomePage = () => {
               {page}
             </button>
           ))}
-          
           <button 
             onClick={handleNextPage}
             disabled={currentPage === totalPages}
-            className={`px-3 py-2 border rounded-lg transition-colors ${
+            className={`px-3 py-2 border rounded-lg transition-colors mb-2 sm:mb-0 ${
               currentPage === totalPages
                 ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                 : 'border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
