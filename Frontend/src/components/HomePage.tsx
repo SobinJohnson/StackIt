@@ -52,13 +52,121 @@ const mockQuestions: Question[] = [
     views: 156,
     createdAt: '1 day ago',
     isAnswered: false
+  },
+  {
+    id: '4',
+    title: 'How to implement authentication in React with JWT?',
+    description: 'I need to implement user authentication in my React app using JWT tokens. What are the best practices?',
+    tags: ['react', 'authentication', 'jwt'],
+    author: 'auth_dev',
+    votes: 15,
+    answers: 5,
+    views: 320,
+    createdAt: '3 days ago',
+    isAnswered: true
+  },
+  {
+    id: '5',
+    title: 'TypeScript interface vs type - when to use which?',
+    description: 'I\'m confused about when to use interfaces vs types in TypeScript. Can someone explain the differences?',
+    tags: ['typescript', 'interfaces', 'types'],
+    author: 'ts_expert',
+    votes: 22,
+    answers: 8,
+    views: 450,
+    createdAt: '5 days ago',
+    isAnswered: true
+  },
+  {
+    id: '6',
+    title: 'Database optimization techniques for large datasets',
+    description: 'My application is getting slow with large datasets. What are some effective database optimization strategies?',
+    tags: ['database', 'optimization', 'performance'],
+    author: 'db_admin',
+    votes: 18,
+    answers: 4,
+    views: 280,
+    createdAt: '1 week ago',
+    isAnswered: false
+  },
+  {
+    id: '7',
+    title: 'Docker containerization best practices',
+    description: 'What are the essential best practices for containerizing applications with Docker?',
+    tags: ['docker', 'containerization', 'devops'],
+    author: 'devops_engineer',
+    votes: 25,
+    answers: 6,
+    views: 380,
+    createdAt: '1 week ago',
+    isAnswered: true
+  },
+  {
+    id: '8',
+    title: 'CSS Grid vs Flexbox - which to use when?',
+    description: 'I\'m learning CSS layout techniques. When should I use Grid vs Flexbox for different scenarios?',
+    tags: ['css', 'grid', 'flexbox'],
+    author: 'frontend_dev',
+    votes: 12,
+    answers: 3,
+    views: 190,
+    createdAt: '2 weeks ago',
+    isAnswered: false
+  },
+  {
+    id: '9',
+    title: 'Git workflow strategies for team development',
+    description: 'What are the most effective Git workflows for team development? GitFlow vs GitHub Flow?',
+    tags: ['git', 'workflow', 'version-control'],
+    author: 'git_master',
+    votes: 30,
+    answers: 7,
+    views: 520,
+    createdAt: '2 weeks ago',
+    isAnswered: true
+  },
+  {
+    id: '10',
+    title: 'Microservices architecture patterns',
+    description: 'I\'m designing a microservices architecture. What are the key patterns and anti-patterns to consider?',
+    tags: ['microservices', 'architecture', 'patterns'],
+    author: 'architect',
+    votes: 35,
+    answers: 9,
+    views: 650,
+    createdAt: '3 weeks ago',
+    isAnswered: true
+  },
+  {
+    id: '11',
+    title: 'React performance optimization techniques',
+    description: 'My React app is getting slow. What are the most effective performance optimization techniques?',
+    tags: ['react', 'performance', 'optimization'],
+    author: 'perf_dev',
+    votes: 28,
+    answers: 6,
+    views: 420,
+    createdAt: '3 weeks ago',
+    isAnswered: true
+  },
+  {
+    id: '12',
+    title: 'API rate limiting implementation',
+    description: 'How do I implement effective rate limiting for my REST API? What are the best practices?',
+    tags: ['api', 'rate-limiting', 'security'],
+    author: 'api_dev',
+    votes: 20,
+    answers: 4,
+    views: 310,
+    createdAt: '4 weeks ago',
+    isAnswered: false
   }
 ];
 
 const HomePage = () => {
   const [filter, setFilter] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
-  const questionsPerPage = 10;
+  const questionsPerPage = 5; // Reduced for better testing
 
   const filters = [
     { key: 'newest', label: 'Newest' },
@@ -66,6 +174,55 @@ const HomePage = () => {
     { key: 'unanswered', label: 'Unanswered' },
     { key: 'votes', label: 'Votes' }
   ];
+
+  // Calculate pagination values
+  const totalQuestions = mockQuestions.length;
+  const totalPages = Math.ceil(totalQuestions / questionsPerPage);
+  const startIndex = (currentPage - 1) * questionsPerPage;
+  const endIndex = startIndex + questionsPerPage;
+  const currentQuestions = mockQuestions.slice(startIndex, endIndex);
+
+  // Handle page navigation
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 7;
+    
+    if (totalPages <= maxVisiblePages) {
+      // Show all pages if total is less than max visible
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show pages around current page
+      const start = Math.max(1, currentPage - 3);
+      const end = Math.min(totalPages, currentPage + 3);
+      
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+    }
+    
+    return pages;
+  };
 
   return (
     <div className="space-y-6">
@@ -83,7 +240,7 @@ const HomePage = () => {
       {/* Stats and Filters */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
         <div className="text-[#888888]">
-          {mockQuestions.length} questions
+          {totalQuestions} questions
         </div>
         
         <div className="flex space-x-2">
@@ -105,7 +262,7 @@ const HomePage = () => {
 
       {/* Questions List */}
       <div className="space-y-4">
-        {mockQuestions.map((question) => (
+        {currentQuestions.map((question) => (
           <div key={question.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
             <div className="flex space-x-4">
               {/* Stats Column */}
@@ -168,27 +325,47 @@ const HomePage = () => {
       </div>
 
       {/* Pagination */}
-      <div className="flex justify-center items-center space-x-2 pt-8">
-        <button className="px-3 py-2 border border-[#888888] rounded-lg hover:border-[#865A7B] hover:text-[#865A7B] transition-colors">
-          &lt;
-        </button>
-        {[1, 2, 3, 4, 5, 6, 7].map((page) => (
-          <button
-            key={page}
-            onClick={() => setCurrentPage(page)}
-            className={`px-3 py-2 rounded-lg transition-colors ${
-              currentPage === page
-                ? 'bg-[#865A7B] text-white'
-                : 'border border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2 pt-8">
+          <button 
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1}
+            className={`px-3 py-2 border rounded-lg transition-colors ${
+              currentPage === 1
+                ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                : 'border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
             }`}
           >
-            {page}
+            &lt;
           </button>
-        ))}
-        <button className="px-3 py-2 border border-[#888888] rounded-lg hover:border-[#865A7B] hover:text-[#865A7B] transition-colors">
-          &gt;
-        </button>
-      </div>
+          
+          {getPageNumbers().map((page) => (
+            <button
+              key={page}
+              onClick={() => handlePageChange(page)}
+              className={`px-3 py-2 rounded-lg transition-colors ${
+                currentPage === page
+                  ? 'bg-[#865A7B] text-white'
+                  : 'border border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          
+          <button 
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className={`px-3 py-2 border rounded-lg transition-colors ${
+              currentPage === totalPages
+                ? 'border-gray-300 text-gray-400 cursor-not-allowed'
+                : 'border-[#888888] hover:border-[#865A7B] hover:text-[#865A7B]'
+            }`}
+          >
+            &gt;
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Bold, Italic, Strikethrough, List, ListOrdered, Link, Image, AlignLeft, AlignCenter, AlignRight, Smile } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -11,26 +11,79 @@ interface RichTextEditorProps {
 const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isInternalUpdate, setIsInternalUpdate] = useState(false);
 
   const emojis = ['😀', '😂', '😊', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💡', '✅', '❌', '⚡', '🚀'];
 
+  // Sync content with value prop
+  useEffect(() => {
+    if (editorRef.current && !isInternalUpdate) {
+      editorRef.current.innerHTML = value;
+    }
+    setIsInternalUpdate(false);
+  }, [value]);
+
+  // Save selection before executing command
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      return selection.getRangeAt(0);
+    }
+    return null;
+  };
+
+  // Restore selection after executing command
+  const restoreSelection = (range: Range | null) => {
+    if (range) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+  };
+
   const executeCommand = (command: string, value?: string) => {
+    const savedRange = saveSelection();
+    
+    // Focus the editor if it's not focused
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
+    
     document.execCommand(command, false, value);
+    
+    restoreSelection(savedRange);
+    
+    // Update the value
     if (editorRef.current) {
+      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
 
   const handleInput = () => {
     if (editorRef.current) {
+      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
 
   const insertEmoji = (emoji: string) => {
+    const savedRange = saveSelection();
+    
+    // Focus the editor if it's not focused
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
+    
     document.execCommand('insertText', false, emoji);
     setShowEmojiPicker(false);
+    
+    restoreSelection(savedRange);
+    
     if (editorRef.current) {
+      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
@@ -46,6 +99,72 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
     const url = prompt('Enter image URL:');
     if (url) {
       executeCommand('insertImage', url);
+    }
+  };
+
+  // Specific functions for list operations
+  const insertOrderedList = () => {
+    console.log('insertOrderedList called');
+    const savedRange = saveSelection();
+    
+    // Focus the editor if it's not focused
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
+    
+    // Simple approach - just execute the command
+    const success = document.execCommand('insertOrderedList', false);
+    console.log('insertOrderedList success:', success);
+    
+    // If that didn't work, try a different approach
+    if (!success) {
+      console.log('Trying alternative approach for ordered list');
+      // Insert a new line and then create list
+      document.execCommand('insertHTML', false, '<ol><li></li></ol>');
+    }
+    
+    restoreSelection(savedRange);
+    
+    // Update the value
+    if (editorRef.current) {
+      setIsInternalUpdate(true);
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
+  const insertUnorderedList = () => {
+    console.log('insertUnorderedList called');
+    const savedRange = saveSelection();
+    
+    // Focus the editor if it's not focused
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
+    }
+    
+    // Simple approach - just execute the command
+    const success = document.execCommand('insertUnorderedList', false);
+    console.log('insertUnorderedList success:', success);
+    
+    // If that didn't work, try a different approach
+    if (!success) {
+      console.log('Trying alternative approach for unordered list');
+      // Insert a new line and then create list
+      document.execCommand('insertHTML', false, '<ul><li></li></ul>');
+    }
+    
+    restoreSelection(savedRange);
+    
+    // Update the value
+    if (editorRef.current) {
+      setIsInternalUpdate(true);
+      onChange(editorRef.current.innerHTML);
+    }
+  };
+
+  const handleEditorClick = () => {
+    // Ensure editor is focused when clicked
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      editorRef.current.focus();
     }
   };
 
@@ -82,7 +201,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         
         <button
           type="button"
-          onClick={() => executeCommand('insertOrderedList')}
+          onClick={insertOrderedList}
           className="p-2 hover:bg-[#865A7B] hover:text-white rounded transition-colors"
           title="Numbered List"
         >
@@ -90,7 +209,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         </button>
         <button
           type="button"
-          onClick={() => executeCommand('insertUnorderedList')}
+          onClick={insertUnorderedList}
           className="p-2 hover:bg-[#865A7B] hover:text-white rounded transition-colors"
           title="Bullet List"
         >
@@ -153,7 +272,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
             <Smile className="w-4 h-4" />
           </button>
           {showEmojiPicker && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-[#888888] rounded-lg shadow-lg p-2 grid grid-cols-5 gap-1 z-10">
+            <div className="absolute top-full left-0 mt-1 bg-white border border-[#888888] min-w-80 rounded-lg shadow-lg p-2 grid grid-cols-5 gap-1 z-10">
               {emojis.map((emoji) => (
                 <button
                   key={emoji}
@@ -174,10 +293,16 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         ref={editorRef}
         contentEditable
         onInput={handleInput}
+        onClick={handleEditorClick}
+        onFocus={handleEditorClick}
         className="min-h-[200px] p-4 focus:outline-none"
-        style={{ whiteSpace: 'pre-wrap' }}
+        style={{ 
+          whiteSpace: 'pre-wrap',
+          lineHeight: '1.6'
+        }}
         data-placeholder={placeholder}
         suppressContentEditableWarning={true}
+        dangerouslySetInnerHTML={{ __html: value }}
       />
     </div>
   );
