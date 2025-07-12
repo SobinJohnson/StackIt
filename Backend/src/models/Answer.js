@@ -49,6 +49,59 @@ answerSchema.methods.downvote = function() {
   return this.save();
 };
 
+// Method to handle vote with proper logic
+answerSchema.methods.handleVote = async function(userId, voteType) {
+  const Vote = require('./Vote');
+  
+  // Check if user already voted
+  const existingVote = await Vote.findOne({
+    userId,
+    questionId: this.questionId,
+    answerId: this._id
+  });
+
+  if (existingVote) {
+    if (existingVote.voteType === voteType) {
+      // User is voting the same way again - remove the vote
+      await Vote.findByIdAndDelete(existingVote._id);
+      if (voteType === 'up') {
+        this.upvotes = Math.max(0, this.upvotes - 1);
+      } else {
+        this.downvotes = Math.max(0, this.downvotes - 1);
+      }
+    } else {
+      // User is changing their vote
+      existingVote.voteType = voteType;
+      await existingVote.save();
+      
+      if (voteType === 'up') {
+        this.upvotes += 1;
+        this.downvotes = Math.max(0, this.downvotes - 1);
+      } else {
+        this.downvotes += 1;
+        this.upvotes = Math.max(0, this.upvotes - 1);
+      }
+    }
+  } else {
+    // New vote
+    const newVote = new Vote({
+      userId,
+      questionId: this.questionId,
+      answerId: this._id,
+      voteType
+    });
+    await newVote.save();
+    
+    if (voteType === 'up') {
+      this.upvotes += 1;
+    } else {
+      this.downvotes += 1;
+    }
+  }
+  
+  return this.save();
+};
+
 // Method to accept answer
 answerSchema.methods.accept = function() {
   this.isAccepted = true;

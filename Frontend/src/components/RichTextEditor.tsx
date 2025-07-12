@@ -11,17 +11,17 @@ interface RichTextEditorProps {
 const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [isInternalUpdate, setIsInternalUpdate] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const emojis = ['😀', '😂', '😊', '😍', '🤔', '👍', '👎', '❤️', '🎉', '🔥', '💡', '✅', '❌', '⚡', '🚀'];
 
-  // Sync content with value prop
+  // Only set innerHTML on mount or when value changes from outside
   useEffect(() => {
-    if (editorRef.current && !isInternalUpdate) {
+    if (editorRef.current && !isInitialized) {
       editorRef.current.innerHTML = value;
+      setIsInitialized(true);
     }
-    setIsInternalUpdate(false);
-  }, [value]);
+  }, [value, isInitialized]);
 
   // Save selection before executing command
   const saveSelection = () => {
@@ -45,45 +45,31 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
 
   const executeCommand = (command: string, value?: string) => {
     const savedRange = saveSelection();
-    
-    // Focus the editor if it's not focused
     if (editorRef.current && document.activeElement !== editorRef.current) {
       editorRef.current.focus();
     }
-    
     document.execCommand(command, false, value);
-    
     restoreSelection(savedRange);
-    
-    // Update the value
     if (editorRef.current) {
-      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
 
   const handleInput = () => {
     if (editorRef.current) {
-      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
 
   const insertEmoji = (emoji: string) => {
     const savedRange = saveSelection();
-    
-    // Focus the editor if it's not focused
     if (editorRef.current && document.activeElement !== editorRef.current) {
       editorRef.current.focus();
     }
-    
     document.execCommand('insertText', false, emoji);
     setShowEmojiPicker(false);
-    
     restoreSelection(savedRange);
-    
     if (editorRef.current) {
-      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
@@ -102,67 +88,37 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
     }
   };
 
-  // Specific functions for list operations
   const insertOrderedList = () => {
-    console.log('insertOrderedList called');
     const savedRange = saveSelection();
-    
-    // Focus the editor if it's not focused
     if (editorRef.current && document.activeElement !== editorRef.current) {
       editorRef.current.focus();
     }
-    
-    // Simple approach - just execute the command
     const success = document.execCommand('insertOrderedList', false);
-    console.log('insertOrderedList success:', success);
-    
-    // If that didn't work, try a different approach
     if (!success) {
-      console.log('Trying alternative approach for ordered list');
-      // Insert a new line and then create list
       document.execCommand('insertHTML', false, '<ol><li></li></ol>');
     }
-    
     restoreSelection(savedRange);
-    
-    // Update the value
     if (editorRef.current) {
-      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
 
   const insertUnorderedList = () => {
-    console.log('insertUnorderedList called');
     const savedRange = saveSelection();
-    
-    // Focus the editor if it's not focused
     if (editorRef.current && document.activeElement !== editorRef.current) {
       editorRef.current.focus();
     }
-    
-    // Simple approach - just execute the command
     const success = document.execCommand('insertUnorderedList', false);
-    console.log('insertUnorderedList success:', success);
-    
-    // If that didn't work, try a different approach
     if (!success) {
-      console.log('Trying alternative approach for unordered list');
-      // Insert a new line and then create list
       document.execCommand('insertHTML', false, '<ul><li></li></ul>');
     }
-    
     restoreSelection(savedRange);
-    
-    // Update the value
     if (editorRef.current) {
-      setIsInternalUpdate(true);
       onChange(editorRef.current.innerHTML);
     }
   };
 
   const handleEditorClick = () => {
-    // Ensure editor is focused when clicked
     if (editorRef.current && document.activeElement !== editorRef.current) {
       editorRef.current.focus();
     }
@@ -196,9 +152,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         >
           <Strikethrough className="w-4 h-4" />
         </button>
-        
         <div className="w-px bg-[#888888] my-1"></div>
-        
         <button
           type="button"
           onClick={insertOrderedList}
@@ -215,9 +169,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         >
           <List className="w-4 h-4" />
         </button>
-        
         <div className="w-px bg-[#888888] my-1"></div>
-        
         <button
           type="button"
           onClick={() => executeCommand('justifyLeft')}
@@ -242,9 +194,7 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         >
           <AlignRight className="w-4 h-4" />
         </button>
-        
         <div className="w-px bg-[#888888] my-1"></div>
-        
         <button
           type="button"
           onClick={insertLink}
@@ -261,7 +211,6 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         >
           <Image className="w-4 h-4" />
         </button>
-        
         <div className="relative">
           <button
             type="button"
@@ -287,7 +236,6 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
           )}
         </div>
       </div>
-      
       {/* Editor */}
       <div
         ref={editorRef}
@@ -302,7 +250,6 @@ const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) =
         }}
         data-placeholder={placeholder}
         suppressContentEditableWarning={true}
-        dangerouslySetInnerHTML={{ __html: value }}
       />
     </div>
   );

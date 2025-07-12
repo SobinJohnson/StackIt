@@ -2,16 +2,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { api, API_ENDPOINTS, handleApiError } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 import RichTextEditor from './RichTextEditor';
 import { X } from 'lucide-react';
 
 const AskQuestionPage = () => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -28,16 +32,88 @@ const AskQuestionPage = () => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated) {
-      alert('Please login to ask a question');
+      toast({
+        title: 'Error',
+        description: 'Please login to ask a question',
+        variant: 'destructive',
+      });
       return;
     }
-    
-    // In a real app, this would submit to an API
-    console.log({ title, description, tags });
-    navigate('/');
+
+    if (!title.trim() || !description.trim() || tags.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all required fields and add at least one tag',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (title.trim().length < 10) {
+      toast({
+        title: 'Error',
+        description: 'Title must be at least 10 characters long',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (title.trim().length > 200) {
+      toast({
+        title: 'Error',
+        description: 'Title must be less than 200 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (description.trim().length < 20) {
+      toast({
+        title: 'Error',
+        description: 'Description must be at least 20 characters long',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (tags.length > 10) {
+      toast({
+        title: 'Error',
+        description: 'You can only add up to 10 tags',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      const response = await api.post(API_ENDPOINTS.QUESTIONS, {
+        title: title.trim(),
+        description: description.trim(),
+        tags: tags
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Question posted successfully!',
+      });
+
+      // Navigate to the new question
+      navigate(`/question/${response.data.question._id}`);
+    } catch (error) {
+      const errorMessage = handleApiError(error);
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isAuthenticated) {
@@ -141,9 +217,10 @@ const AskQuestionPage = () => {
           </button>
           <button
             type="submit"
-            className="px-6 py-3 bg-[#865A7B] text-white rounded-lg hover:bg-[#764a6b] transition-colors font-medium"
+            disabled={isSubmitting}
+            className="px-6 py-3 bg-[#865A7B] text-white rounded-lg hover:bg-[#764a6b] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Post Your Question
+            {isSubmitting ? 'Posting...' : 'Post Your Question'}
           </button>
         </div>
       </form>

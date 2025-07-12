@@ -36,6 +36,14 @@ const questionSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  upvotes: {
+    type: Number,
+    default: 0
+  },
+  downvotes: {
+    type: Number,
+    default: 0
+  },
   searchText: {
     type: String,
     default: ''
@@ -80,6 +88,70 @@ questionSchema.methods.setAcceptedAnswer = function(answerId) {
   return this.save();
 };
 
+// Method to upvote question
+questionSchema.methods.upvote = function() {
+  this.upvotes += 1;
+  return this.save();
+};
+
+// Method to downvote question
+questionSchema.methods.downvote = function() {
+  this.downvotes += 1;
+  return this.save();
+};
+
+// Method to handle vote with proper logic
+questionSchema.methods.handleVote = async function(userId, voteType) {
+  const Vote = require('./Vote');
+  
+  // Check if user already voted
+  const existingVote = await Vote.findOne({
+    userId,
+    questionId: this._id,
+    answerId: null
+  });
+
+  if (existingVote) {
+    if (existingVote.voteType === voteType) {
+      // User is voting the same way again - remove the vote
+      await Vote.findByIdAndDelete(existingVote._id);
+      if (voteType === 'up') {
+        this.upvotes = Math.max(0, this.upvotes - 1);
+      } else {
+        this.downvotes = Math.max(0, this.downvotes - 1);
+      }
+    } else {
+      // User is changing their vote
+      existingVote.voteType = voteType;
+      await existingVote.save();
+      
+      if (voteType === 'up') {
+        this.upvotes += 1;
+        this.downvotes = Math.max(0, this.downvotes - 1);
+      } else {
+        this.downvotes += 1;
+        this.upvotes = Math.max(0, this.upvotes - 1);
+      }
+    }
+  } else {
+    // New vote
+    const newVote = new Vote({
+      userId,
+      questionId: this._id,
+      voteType
+    });
+    await newVote.save();
+    
+    if (voteType === 'up') {
+      this.upvotes += 1;
+    } else {
+      this.downvotes += 1;
+    }
+  }
+  
+  return this.save();
+};
+
 // Method to get public JSON
 questionSchema.methods.toPublicJSON = function() {
   return {
@@ -91,6 +163,8 @@ questionSchema.methods.toPublicJSON = function() {
     answerCount: this.answerCount,
     acceptedAnswerId: this.acceptedAnswerId,
     viewCount: this.viewCount,
+    upvotes: this.upvotes,
+    downvotes: this.downvotes,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt
   };

@@ -262,21 +262,33 @@ router.post('/:id/vote', auth, [
       });
     }
 
-    // Check if user is voting on their own answer
-    if (answer.authorId.toString() === req.user._id.toString()) {
-      return res.status(400).json({
-        success: false,
-        message: 'You cannot vote on your own answer'
-      });
-    }
-
     const { voteType } = req.body;
 
-    // Update vote count
-    if (voteType === 'upvote') {
-      await answer.upvote();
-    } else {
-      await answer.downvote();
+    // Apply vote with proper logic
+    const type = voteType === 'upvote' ? 'up' : 'down';
+    await answer.handleVote(req.user._id, type);
+
+    // Create notification for answer author (if not voting on own answer)
+    if (answer.authorId.toString() !== req.user._id.toString()) {
+      const notification = new Notification({
+        recipientId: answer.authorId,
+        type: 'vote',
+        questionId: answer.questionId,
+        answerId: answer._id,
+        content: `${req.user.username} ${type === 'up' ? 'upvoted' : 'downvoted'} your answer`,
+        senderId: req.user._id
+      });
+      await notification.save();
+
+      // Send real-time notification
+      if (global.io) {
+        global.io.to(`user_${answer.authorId}`).emit('new_notification', {
+          type: 'vote',
+          message: `${req.user.username} ${type === 'up' ? 'upvoted' : 'downvoted'} your answer`,
+          questionId: answer.questionId,
+          answerId: answer._id
+        });
+      }
     }
 
     // Send real-time vote update

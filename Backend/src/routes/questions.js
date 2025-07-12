@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Question = require('../models/Question');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -21,7 +22,13 @@ router.get('/', async (req, res) => {
 
     // Search functionality
     if (search) {
-      query.$text = { $search: search };
+      // Use regex for partial matching on title, description, and tags
+      const searchRegex = new RegExp(search, 'i'); // 'i' for case-insensitive
+      query.$or = [
+        { title: searchRegex },
+        { description: searchRegex },
+        { tags: searchRegex }
+      ];
     }
 
     // Tag filtering
@@ -277,6 +284,228 @@ router.delete('/:id', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while deleting question'
+    });
+  }
+});
+
+// POST /api/questions/:id/vote - Vote on question
+router.post('/:id/vote', auth, [
+  body('type')
+    .isIn(['up', 'down'])
+    .withMessage('Vote type must be either "up" or "down"')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const question = await Question.findById(req.params.id);
+
+    if (!question) {
+      return res.status(404).json({
+        success: false,
+        message: 'Question not found'
+      });
+    }
+
+    const { type } = req.body;
+
+    // Apply vote with proper logic
+    await question.handleVote(req.user._id, type);
+
+    // Create notification for question author (if not voting on own question)
+    if (question.authorId.toString() !== req.user._id.toString()) {
+      const notification = new Notification({
+        recipientId: question.authorId,
+        type: 'vote',
+        questionId: question._id,
+        content: `${req.user.username} ${type === 'up' ? 'upvoted' : 'downvoted'} your question`,
+        senderId: req.user._id
+      });
+      await notification.save();
+
+      // Send real-time notification
+      if (global.io) {
+        global.io.to(`user_${question.authorId}`).emit('new_notification', {
+          type: 'vote',
+          message: `${req.user.username} ${type === 'up' ? 'upvoted' : 'downvoted'} your question`,
+          questionId: question._id
+        });
+      }
+    }
+
+    // Populate author info
+    await question.populate('authorId', 'username avatarUrl');
+
+    res.json({
+      success: true,
+      message: 'Vote recorded successfully',
+      question: question.toPublicJSON()
+    });
+  } catch (error) {
+    console.error('Vote question error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while recording vote'
+    });
+  }
+});
+
+// GET /api/questions/user/me - Get current user's questions
+router.get('/user/me', auth, async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      sort = 'newest'
+    } = req.query;
+
+    const query = { authorId: req.user._id };
+
+    // Search functionality
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query.$or = [
+        { title: searchRegex },
+        { description: searchRegex },
+        { tags: searchRegex }
+      ];
+    }
+
+    // Sorting
+    let sortOption = {};
+    switch (sort) {
+      case 'newest':
+        sortOption = { createdAt: -1 };
+        break;
+      case 'oldest':
+        sortOption = { createdAt: 1 };
+        break;
+      case 'most_answers':
+        sortOption = { answerCount: -1 };
+        break;
+      case 'most_views':
+        sortOption = { viewCount: -1 };
+        break;
+      default:
+        sortOption = { createdAt: -1 };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const questions = await Question.find(query)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate('authorId', 'username avatarUrl');
+
+    const total = await Question.countDocuments(query);
+    const totalPages = Math.ceil(total / parseInt(limit));
+
+    res.json({
+      success: true,
+      questions: questions.map(q => q.toPublicJSON()),
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    console.error('Get user questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user questions'
+    });
+  }
+});
+
+// GET /api/questions/user/:userId - Get questions by specific user
+router.get('/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      sort = 'newest'
+    } = req.query;
+
+    // Verify user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const query = { authorId: userId };
+
+    // Search functionality
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query.$or = [
+        { title: searchRegex },
+        { description: searchRegex },
+        { tags: searchRegex }
+      ];
+    }
+
+    // Sorting
+    let sortOption = {};
+    switch (sort) {
+      case 'newest':
+        sortOption = { createdAt: -1 };
+        break;
+      case 'oldest':
+        sortOption = { createdAt: 1 };
+        break;
+      case 'most_answers':
+        sortOption = { answerCount: -1 };
+        break;
+      case 'most_views':
+        sortOption = { viewCount: -1 };
+        break;
+      default:
+        sortOption = { createdAt: -1 };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const questions = await Question.find(query)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .populate('authorId', 'username avatarUrl');
+
+    const total = await Question.countDocuments(query);
+    const totalPages = Math.ceil(total / parseInt(limit));
+
+    res.json({
+      success: true,
+      questions: questions.map(q => q.toPublicJSON()),
+      user: user.toPublicJSON(),
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages
+      }
+    });
+  } catch (error) {
+    console.error('Get user questions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching user questions'
     });
   }
 });

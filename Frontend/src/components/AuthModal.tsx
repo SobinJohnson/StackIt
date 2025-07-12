@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -19,13 +19,27 @@ const AuthModal = ({ mode, onClose, onSwitchMode }: AuthModalProps) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // Reset form data when mode changes
+  useEffect(() => {
+    setFormData({
+      username: '',
+      email: '',
+      password: '',
+      confirmPassword: ''
+    });
+  }, [mode]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
+    // Debug log to see what's being sent
+    console.log('Form data being sent:', formData);
+
     try {
       if (mode === 'login') {
-        await login(formData.username, formData.password);
+        console.log('Attempting login with:', { email: formData.email, password: formData.password });
+        await login(formData.email, formData.password);
       } else {
         if (formData.password !== formData.confirmPassword) {
           alert('Passwords do not match');
@@ -36,17 +50,19 @@ const AuthModal = ({ mode, onClose, onSwitchMode }: AuthModalProps) => {
       onClose();
     } catch (error) {
       console.error('Auth error:', error);
-      alert('Authentication failed. Please try again.');
+      // Error is already handled by the auth context
     } finally {
       setLoading(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
+    const newFormData = {
       ...formData,
       [e.target.name]: e.target.value
-    });
+    };
+    console.log('Form data updated:', newFormData);
+    setFormData(newFormData);
   };
 
   return (
@@ -65,37 +81,37 @@ const AuthModal = ({ mode, onClose, onSwitchMode }: AuthModalProps) => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-900 mb-1">
-              Username
-            </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              value={formData.username}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-[#888888] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#865A7B] focus:border-transparent"
-              required
-            />
-          </div>
-
           {mode === 'register' && (
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-900 mb-1">
-                Email
+              <label htmlFor="username" className="block text-sm font-medium text-gray-900 mb-1">
+                Username
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                value={formData.email}
+                id="username"
+                name="username"
+                type="text"
+                value={formData.username}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-[#888888] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#865A7B] focus:border-transparent"
                 required
               />
             </div>
           )}
+
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-900 mb-1">
+              Email
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-[#888888] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#865A7B] focus:border-transparent"
+              required
+            />
+          </div>
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-900 mb-1">
